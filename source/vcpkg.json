@@ -1,0 +1,8 @@
+{
+  "name": "howtovulkan",
+  "version": "0.1.0",
+  "dependencies": [
+    "tinyobjloader",
+    {"name": "ktx", "features": ["vulkan"]}
+  ]
+}
