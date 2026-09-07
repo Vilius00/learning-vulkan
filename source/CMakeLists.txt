@@ -15,14 +15,11 @@ endif()
 
 # SDL3, Volk, VMA, glm and Slang are taken from the SDK
 include_directories(SYSTEM $ENV{VULKAN_SDK}/include)
-# These are not part of the SDK
-# include_directories(external/tinyobj)
-# include_directories(external/ktx/include)
-# include_directories(external/ktx/other_include)
 
 find_package (Vulkan REQUIRED)
 find_package (Ktx CONFIG REQUIRED)
 find_package (tinyobjloader CONFIG REQUIRED)
+find_package (SDL3 CONFIG REQUIRED)
 
 if (NOT WIN32)
     FetchContent_Declare(GLM
@@ -33,25 +30,6 @@ if (NOT WIN32)
         SYSTEM)
     FetchContent_MakeAvailable(GLM)
 endif()
-
-# set(KTX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/ktx)
-# set(KTX_SOURCES
-#     ${KTX_DIR}/lib/texture.c
-#     ${KTX_DIR}/lib/hashlist.c
-#     ${KTX_DIR}/lib/checkheader.c
-#     ${KTX_DIR}/lib/swap.c
-#     ${KTX_DIR}/lib/memstream.c
-#     ${KTX_DIR}/lib/filestream.c
-#     ${KTX_DIR}/lib/vkloader.c)
-# add_library(ktx STATIC ${KTX_SOURCES})
-
-# if (TARGET Vulkan::Vulkan)
-#     target_link_libraries(ktx PUBLIC Vulkan::Vulkan)
-# elseif (APPLE)
-#     target_link_libraries(ktx PUBLIC $ENV{VULKAN_SDK}/lib/libvulkan.dylib)
-# elseif (NOT WIN32)
-#     target_link_libraries(ktx PUBLIC $ENV{VULKAN_SDK}/lib/libvulkan.so)
-# endif()
 
 find_library(SDL_LIBRARY NAMES SDL3 HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
 find_library(Slang_LIBRARY NAMES slang slang-compiler HINTS "$ENV{VULKAN_SDK}/lib" REQUIRED)
@@ -74,7 +52,7 @@ if (WIN32)
 endif()
 set_target_properties(${NAME} PROPERTIES DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(${NAME} PRIVATE cxx_std_20)
-target_link_libraries(${NAME} PRIVATE ${SDL_LIBRARY} KTX::ktx tinyobjloader::tinyobjloader ${Slang_LIBRARY})
+target_link_libraries(${NAME} PRIVATE ${SDL_LIBRARY} KTX::ktx ${Slang_LIBRARY})
 if (NOT WIN32)
     target_link_libraries(${NAME} PRIVATE glm::glm-header-only)
 endif()

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "dependencies": [
     "tinyobjloader",
-    {"name": "ktx", "features": ["vulkan"]}
+    {"name": "ktx", "features": ["vulkan"]},
+    {"name": "sdl3", "features": ["vulkan"]}
   ]
 }

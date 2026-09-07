@@ -2,12 +2,12 @@
 #define VOLK_IMPLEMENTATION
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+#include <Volk/volk.h>
 #include <array>
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <volk/volk.h>
 #include <vulkan/vulkan.h>
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
@@ -18,6 +18,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/rotate_vector.hpp>
 #include <ktx.h>
 #include <ktxvulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -111,6 +113,7 @@ static inline void chk(bool result) {
 }
 
 int main(int argc, char *argv[]) {
+  std::cout << "Starting" << std::endl;
   if (!std::filesystem::is_directory("assets")) {
     std::cerr
         << "Coult not lovate assets folder from current working directory\n";
@@ -223,6 +226,7 @@ int main(int argc, char *argv[]) {
   chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
 
   VkSurfaceCapabilitiesKHR surfaceCaps{};
+  std::cout << "225" << std::endl;
   chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], surface,
                                                 &surfaceCaps));
 
@@ -318,7 +322,7 @@ int main(int argc, char *argv[]) {
   std::vector<tinyobj::material_t> materials;
   chk(tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr,
                        "assets/suzanne.obj"));
-
+  std::cout << "323" << std::endl;
   const VkDeviceSize indexCount{shapes[0].mesh.indices.size()};
   std::vector<Vertex> vertices{};
   std::vector<uint16_t> indices{};
@@ -402,6 +406,7 @@ int main(int argc, char *argv[]) {
       .commandBufferCount = maxFramesInFlight};
   chk(vkAllocateCommandBuffers(device, &cbAllocCI, commandBuffers.data()));
 
+  std::cout << "407" << std::endl;
   std::vector<VkDescriptorImageInfo> textureDescriptors{};
   for (auto i = 0; i < textures.size(); i++) {
     ktxTexture *ktxTexture{nullptr};
@@ -503,6 +508,7 @@ int main(int argc, char *argv[]) {
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            static_cast<uint32_t>(copyRegions.size()),
                            copyRegions.data());
+    std::cout << "509" << std::endl;
     VkImageMemoryBarrier2 barrierTexRead{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -580,6 +586,7 @@ int main(int argc, char *argv[]) {
   chk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
 
   uint32_t variableDescCount{static_cast<uint32_t>(textures.size())};
+  std::cout << "587" << std::endl;
   VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{
       .sType =
           VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT,
@@ -609,33 +616,55 @@ int main(int argc, char *argv[]) {
   auto slangTargets{std::to_array<slang::TargetDesc>(
       {{.format{SLANG_SPIRV},
         .profile{slangGlobalSession->findProfile("spirv_1_4")}}})};
-  auto slangOptions{std::to_array<slang::CompilerOptionEntry>({{
-      slang::CompilerOptionName::EmitSpirvDirectly,
-      {slang::CompilerOptionValueKind::Int, 1},
-  }})};
+  auto slangOptions{std::to_array<slang::CompilerOptionEntry>(
+      {{slang::CompilerOptionName::EmitSpirvDirectly,
+        {slang::CompilerOptionValueKind::Int, 1}}})};
+  const char *searchPaths[] = {"assets"};
   slang::SessionDesc slangSessionDesc{
       .targets{slangTargets.data()},
       .targetCount{SlangInt(slangTargets.size())},
       .defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR,
+      .searchPaths{searchPaths},
+      .searchPathCount{1},
       .compilerOptionEntries{slangOptions.data()},
-      .compilerOptionEntryCount{uint32_t(slangOptions.size())},
-  };
+      .compilerOptionEntryCount{uint32_t(slangOptions.size())}};
+  // Load shader
   Slang::ComPtr<slang::ISession> slangSession;
-  slangGlobalSession->createSession(slangSessionDesc, slangSession.writeRef());
+  auto sessionResult = slangGlobalSession->createSession(
+      slangSessionDesc, slangSession.writeRef());
+  if (SLANG_FAILED(sessionResult)) {
+    std::cerr << "Failed to create Slang session\n"
+              << "SlangResult = 0x" << std::hex << sessionResult << std::dec
+              << std::endl;
+    exit(-1);
+  }
 
-  Slang::ComPtr<slang::IModule> slangModule{slangSession->loadModuleFromSource(
-      "triangle", "assets/shader.slang", nullptr, nullptr)};
-  Slang::ComPtr<ISlangBlob> spirv;
-  slangModule->getTargetCode(0, spirv.writeRef());
+  Slang::ComPtr<slang::IModule> slangModule{slangSession->loadModule("shader")};
+  if (!slangModule) {
+    std::cerr << "Failed to load/compile shader.slang\n";
+    exit(-1);
+  }
+
+  Slang::ComPtr<slang::IBlob> spirv;
+  Slang::ComPtr<slang::IBlob> compileDiagnostics;
+  auto codeResult = slangModule->getTargetCode(0, spirv.writeRef(),
+                                               compileDiagnostics.writeRef());
+  if (compileDiagnostics) {
+    std::cerr << "Slang compile diagnostics: "
+              << (const char *)compileDiagnostics->getBufferPointer()
+              << std::endl;
+  }
+  if (SLANG_FAILED(codeResult) || !spirv) {
+    std::cerr << "Failed to get target code (SPIR-V) from shader module\n";
+    exit(-1);
+  }
 
   VkShaderModuleCreateInfo shaderModuleCI{
       .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
       .codeSize = spirv->getBufferSize(),
-      .pCode = (uint32_t *)spirv->getBufferPointer(),
-  };
+      .pCode = (uint32_t *)spirv->getBufferPointer()};
   VkShaderModule shaderModule{};
   chk(vkCreateShaderModule(device, &shaderModuleCI, nullptr, &shaderModule));
-
   VkPushConstantRange pushConstantRange{.stageFlags =
                                             VK_SHADER_STAGE_VERTEX_BIT,
                                         .size = sizeof(VkDeviceAddress)};
@@ -649,6 +678,7 @@ int main(int argc, char *argv[]) {
   chk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr,
                              &pipelineLayout));
 
+  std::cout << "658" << std::endl;
   VkVertexInputBindingDescription vertexBinding{
       .binding = 0,
       .stride = sizeof(Vertex),
@@ -751,9 +781,11 @@ int main(int argc, char *argv[]) {
   chk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, nullptr,
                                 &pipeline));
 
+  std::cout << "Before while" << std::endl;
   uint64_t lastTime{SDL_GetTicks()};
   bool quit{false};
   while (!quit) {
+    auto elapsedTime{(SDL_GetTicks() - lastTime) / 1000.0f};
     // Wait on fence
     chk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));
     chk(vkResetFences(device, 1, &fences[frameIndex]));
@@ -771,6 +803,10 @@ int main(int argc, char *argv[]) {
       shaderData.model[i] = glm::translate(glm::mat4(1.0f), instancePos) *
                             glm::mat4_cast(glm::quat(objectRotations[i]));
     }
+    shaderData.lightPos = glm::rotate(shaderData.lightPos,
+                                      glm::radians(glm::quarter_pi<float>()) *
+                                          elapsedTime * 1000.0f,
+                                      glm::vec3(0.0f, 1.0f, 0.0f));
 
     memcpy(shaderDataBuffers[frameIndex].allocationInfo.pMappedData,
            &shaderData, sizeof(ShaderData));
@@ -922,7 +958,6 @@ int main(int argc, char *argv[]) {
                                  .pImageIndices = &imageIndex};
     chkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
     // Poll events
-    auto elapsedTime{(SDL_GetTicks() - lastTime) / 1000.0f};
     lastTime = SDL_GetTicks();
     for (SDL_Event event; SDL_PollEvent(&event);) {
       if (event.type == SDL_EVENT_QUIT) {
