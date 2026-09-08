@@ -23,6 +23,8 @@
 #include <ktx.h>
 #include <ktxvulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
+#include "checking.h"
+#include "raytracing.cpp"
 #include <tiny_obj_loader.h>
 
 constexpr uint32_t maxFramesInFlight{2};
@@ -86,31 +88,6 @@ VkDescriptorSet descriptorSetTex{VK_NULL_HANDLE};
 Slang::ComPtr<slang::IGlobalSession> slangGlobalSession;
 glm::vec3 camPos{0.0f, 0.0f, -6.0f};
 glm::vec3 objectRotations[3]{};
-
-static inline void chk(VkResult result) {
-  if (result != VK_SUCCESS) {
-    std::cerr << "Vulkan call returned an error (" << result << ")\n";
-    exit(result);
-  }
-}
-
-static inline void chkSwapchain(VkResult result) {
-  if (result < VK_SUCCESS) {
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-      updateSwapchain = true;
-      return;
-    }
-    std::cerr << "Vulkan call returned an error (" << result << ")\n";
-    exit(result);
-  }
-}
-
-static inline void chk(bool result) {
-  if (!result) {
-    std::cerr << "Vulkan call returned an error\n";
-    exit(result);
-  }
-}
 
 int main(int argc, char *argv[]) {
   std::cout << "Starting" << std::endl;
@@ -179,7 +156,10 @@ int main(int argc, char *argv[]) {
       .pQueuePriorities = &qfpriorities};
 
   const std::vector<const char *> deviceExtensions{
-      VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+      VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+      VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+      VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME};
 
   VkPhysicalDeviceVulkan12Features enabledVk12Features{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
@@ -341,10 +321,13 @@ int main(int argc, char *argv[]) {
 
   VkDeviceSize vBufSize{sizeof(Vertex) * vertices.size()};
   VkDeviceSize iBufSize{sizeof(uint16_t) * indices.size()};
-  VkBufferCreateInfo bufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                              .size = vBufSize + iBufSize,
-                              .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                                       VK_BUFFER_USAGE_INDEX_BUFFER_BIT};
+  VkBufferCreateInfo bufferCI{
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size = vBufSize + iBufSize,
+      .usage =
+          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+          VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR};
 
   VmaAllocationCreateInfo vBufferAllocCI{
       .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -792,7 +775,8 @@ int main(int argc, char *argv[]) {
     // Acquire next image
     chkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
                                        imageAcquiredSemaphores[frameIndex],
-                                       VK_NULL_HANDLE, &imageIndex));
+                                       VK_NULL_HANDLE, &imageIndex),
+                 updateSwapchain);
     // Update shader data
     shaderData.projection = glm::perspective(
         glm::radians(45.0f), (float)windowSize.x / (float)windowSize.y, 0.1f,
@@ -812,6 +796,15 @@ int main(int argc, char *argv[]) {
            &shaderData, sizeof(ShaderData));
     // Record command buffer
     auto cb = commandBuffers[frameIndex];
+
+    RayTracing rt{};
+    VkBufferDeviceAddressInfo vBufferBdaInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+        .buffer = vBuffer};
+    VkDeviceAddress vertexBufferAddress =
+        vkGetBufferDeviceAddress(device, &vBufferBdaInfo);
+    rt.accelerationStructure();
+
     chk(vkResetCommandBuffer(cb, 0));
 
     VkCommandBufferBeginInfo cbBI{
@@ -956,7 +949,7 @@ int main(int argc, char *argv[]) {
                                  .swapchainCount = 1,
                                  .pSwapchains = &swapchain,
                                  .pImageIndices = &imageIndex};
-    chkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
+    chkSwapchain(vkQueuePresentKHR(queue, &presentInfo), updateSwapchain);
     // Poll events
     lastTime = SDL_GetTicks();
     for (SDL_Event event; SDL_PollEvent(&event);) {

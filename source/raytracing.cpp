@@ -1,4 +1,8 @@
+#include "checking.h"
+#include <Volk/volk.h>
 #include <glm/vec3.hpp>
+#include <iostream>
+#include <vulkan/vulkan.h>
 
 class Ray {
 public:
@@ -14,4 +18,20 @@ public:
 
 private:
   glm::vec3 orig, dir;
+};
+
+class RayTracing {
+public:
+  VkAccelerationStructureKHR accelerationStructure() {
+    VkAccelerationStructureKHR as;
+    // VkAccelerationStructureBuildGeometryInfoKHR asbgInfo{
+    //   .sType =
+    //   VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+    //     .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    //     .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+    //     .dstAccelerationStructure = as,
+    //     .
+    // };
+    return as;
+  }
 };
