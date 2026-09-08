@@ -25,6 +25,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "checking.h"
 #include "raytracing.cpp"
+#include "vertex.h"
 #include <tiny_obj_loader.h>
 
 constexpr uint32_t maxFramesInFlight{2};
@@ -60,12 +61,6 @@ struct ShaderDataBuffer {
 std::array<ShaderDataBuffer, maxFramesInFlight> shaderDataBuffers;
 std::array<VkCommandBuffer, maxFramesInFlight> commandBuffers;
 std::array<VkFence, maxFramesInFlight> fences;
-
-struct Vertex {
-  glm::vec3 pos;
-  glm::vec3 normal;
-  glm::vec2 uv;
-};
 
 struct ShaderData {
   glm::mat4 projection;
@@ -803,7 +798,9 @@ int main(int argc, char *argv[]) {
         .buffer = vBuffer};
     VkDeviceAddress vertexBufferAddress =
         vkGetBufferDeviceAddress(device, &vBufferBdaInfo);
-    rt.accelerationStructure();
+    VkDeviceAddress indexBufferAddress = vertexBufferAddress + vBufSize;
+    rt.accelerationStructure(vertexBufferAddress, indexBufferAddress, vBufSize,
+                             iBufSize);
 
     chk(vkResetCommandBuffer(cb, 0));
 
