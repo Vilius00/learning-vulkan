@@ -86,7 +86,6 @@ glm::vec3 camPos{0.0f, 0.0f, -6.0f};
 glm::vec3 objectRotations[3]{};
 
 int main(int argc, char *argv[]) {
-  std::cout << "Starting" << std::endl;
   if (!std::filesystem::is_directory("assets")) {
     std::cerr
         << "Coult not lovate assets folder from current working directory\n";
@@ -202,7 +201,6 @@ int main(int argc, char *argv[]) {
   chk(SDL_GetWindowSize(window, &windowSize.x, &windowSize.y));
 
   VkSurfaceCapabilitiesKHR surfaceCaps{};
-  std::cout << "225" << std::endl;
   chk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(devices[deviceIndex], surface,
                                                 &surfaceCaps));
 
@@ -298,7 +296,6 @@ int main(int argc, char *argv[]) {
   std::vector<tinyobj::material_t> materials;
   chk(tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, nullptr,
                        "assets/suzanne.obj"));
-  std::cout << "323" << std::endl;
   const VkDeviceSize indexCount{shapes[0].mesh.indices.size()};
   std::vector<Vertex> vertices{};
   std::vector<uint16_t> indices{};
@@ -385,7 +382,6 @@ int main(int argc, char *argv[]) {
       .commandBufferCount = maxFramesInFlight};
   chk(vkAllocateCommandBuffers(device, &cbAllocCI, commandBuffers.data()));
 
-  std::cout << "407" << std::endl;
   std::vector<VkDescriptorImageInfo> textureDescriptors{};
   for (auto i = 0; i < textures.size(); i++) {
     ktxTexture *ktxTexture{nullptr};
@@ -487,7 +483,6 @@ int main(int argc, char *argv[]) {
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            static_cast<uint32_t>(copyRegions.size()),
                            copyRegions.data());
-    std::cout << "509" << std::endl;
     VkImageMemoryBarrier2 barrierTexRead{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -565,7 +560,6 @@ int main(int argc, char *argv[]) {
   chk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
 
   uint32_t variableDescCount{static_cast<uint32_t>(textures.size())};
-  std::cout << "587" << std::endl;
   VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{
       .sType =
           VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT,
@@ -657,7 +651,6 @@ int main(int argc, char *argv[]) {
   chk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr,
                              &pipelineLayout));
 
-  std::cout << "658" << std::endl;
   VkVertexInputBindingDescription vertexBinding{
       .binding = 0,
       .stride = sizeof(Vertex),
@@ -760,7 +753,6 @@ int main(int argc, char *argv[]) {
   chk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, nullptr,
                                 &pipeline));
 
-  std::cout << "Before while" << std::endl;
   uint64_t lastTime{SDL_GetTicks()};
   bool quit{false};
   while (!quit) {
