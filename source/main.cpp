@@ -24,7 +24,6 @@
 #include <ktx.h>
 #include <ktxvulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "buffer.h"
 #include "checking.h"
 #include "raytracing.cpp"
 #include "vertex.h"
@@ -809,8 +808,9 @@ int main(int argc, char *argv[]) {
     VkDeviceAddress vertexBufferAddress =
         vkGetBufferDeviceAddress(device, &vBufferBdaInfo);
     VkDeviceAddress indexBufferAddress = vertexBufferAddress + vBufSize;
-    rt.cmdBuildBlas(device, devices[deviceIndex], vertexBufferAddress,
-                    indexBufferAddress, vBufSize, commandBuffers[frameIndex]);
+    BLAS blas = rt.cmdBuildBlas(device, devices[deviceIndex],
+                                vertexBufferAddress, indexBufferAddress,
+                                vBufSize, commandBuffers[frameIndex]);
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{
@@ -1048,6 +1048,9 @@ int main(int argc, char *argv[]) {
                                .layerCount = 1}};
       chk(vkCreateImageView(device, &viewCI, nullptr, &depthImageView));
     }
+
+    vmaDestroyBuffer(allocator, blas.buffer, blas.allocation);
+    vmaDestroyBuffer(allocator, blas.scratchBuffer, blas.scratchAllocation);
   }
   // Clean up
   chk(vkDeviceWaitIdle(device));
