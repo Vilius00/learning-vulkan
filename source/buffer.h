@@ -10,6 +10,12 @@ public:
 
   void createScratchBuffer(VkDeviceSize size, VkDeviceSize alignment,
                            VkBuffer &buffer, VmaAllocation &bufferAllocation);
+  void createBackingTLASBuffer(VkDeviceSize size, VkBuffer &buffer,
+                               VmaAllocation &bufferAllocation);
+
+  void createInstanceBuffer(VkAccelerationStructureInstanceKHR asInstance,
+                            VkDeviceSize size, VkBuffer &buffer,
+                            VmaAllocation &bufferAllocation);
 
 private:
   VmaAllocator &allocator;

@@ -2,8 +2,9 @@
 #include "checking.h"
 #include "vertex.h"
 #include <Volk/volk.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
-#include <iostream>
 #include <vulkan/vulkan.h>
 
 class Ray {
@@ -29,6 +30,8 @@ struct BLAS {
   VkBuffer scratchBuffer{VK_NULL_HANDLE};
   VmaAllocation scratchAllocation{VK_NULL_HANDLE};
 };
+
+struct TLAS {};
 
 class RayTracing {
 public:
@@ -131,6 +134,31 @@ public:
             .scratchAllocation = blasScratchAllocation};
   }
 
+  TLAS sthBuildTlas(VkDeviceAddress blasAddress) {
+    VkAccelerationStructureInstanceKHR asInstance{
+        .transform = toVkTransformMatrix(glm::mat4(1.0f)),
+        .instanceCustomIndex = 0,
+        .mask = 0xFF,
+        .instanceShaderBindingTableRecordOffset = 0,
+        .accelerationStructureReference = blasAddress,
+    };
+
+    BufferCreator bc{allocator};
+    VkBuffer tlasBuffer{VK_NULL_HANDLE};
+    VmaAllocation tlasAllocation{VK_NULL_HANDLE};
+    bc.createBackingTLASBuffer(sizeof(VkAccelerationStructureInstanceKHR) * 1,
+                               tlasBuffer, tlasAllocation);
+
+    return {};
+  }
+
 private:
+  VkTransformMatrixKHR toVkTransformMatrix(const glm::mat4 &m) {
+    glm::mat4 t = glm::transpose(m);
+    // glm::mat4 t = m;
+    VkTransformMatrixKHR out{};
+    memcpy(&out.matrix, &t, sizeof(VkTransformMatrixKHR));
+    return out;
+  }
   VmaAllocator &allocator;
 };

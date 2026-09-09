@@ -803,6 +803,7 @@ int main(int argc, char *argv[]) {
     BLAS blas = rt.cmdBuildBlas(device, devices[deviceIndex],
                                 vertexBufferAddress, indexBufferAddress,
                                 vBufSize, commandBuffers[frameIndex]);
+    rt.sthBuildTlas();
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{
