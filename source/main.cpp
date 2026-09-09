@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <malloc.h>
 #define VOLK_IMPLEMENTATION
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -23,6 +24,7 @@
 #include <ktx.h>
 #include <ktxvulkan.h>
 #define TINYOBJLOADER_IMPLEMENTATION
+#include "buffer.h"
 #include "checking.h"
 #include "raytracing.cpp"
 #include "vertex.h"
@@ -792,16 +794,6 @@ int main(int argc, char *argv[]) {
     // Record command buffer
     auto cb = commandBuffers[frameIndex];
 
-    RayTracing rt{};
-    VkBufferDeviceAddressInfo vBufferBdaInfo{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
-        .buffer = vBuffer};
-    VkDeviceAddress vertexBufferAddress =
-        vkGetBufferDeviceAddress(device, &vBufferBdaInfo);
-    VkDeviceAddress indexBufferAddress = vertexBufferAddress + vBufSize;
-    rt.accelerationStructure(vertexBufferAddress, indexBufferAddress, vBufSize,
-                             iBufSize);
-
     chk(vkResetCommandBuffer(cb, 0));
 
     VkCommandBufferBeginInfo cbBI{
@@ -809,6 +801,16 @@ int main(int argc, char *argv[]) {
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
     };
     chk(vkBeginCommandBuffer(cb, &cbBI));
+
+    RayTracing rt{allocator};
+    VkBufferDeviceAddressInfo vBufferBdaInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
+        .buffer = vBuffer};
+    VkDeviceAddress vertexBufferAddress =
+        vkGetBufferDeviceAddress(device, &vBufferBdaInfo);
+    VkDeviceAddress indexBufferAddress = vertexBufferAddress + vBufSize;
+    rt.cmdBuildBlas(device, devices[deviceIndex], vertexBufferAddress,
+                    indexBufferAddress, vBufSize, commandBuffers[frameIndex]);
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{

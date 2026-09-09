@@ -4,10 +4,13 @@
 
 class BufferCreator {
 public:
-  BufferCreator(VmaAllocator &);
+  BufferCreator(VmaAllocator &allocator);
   void createBackingBLASBuffer(VkDeviceSize size, VkBuffer &buffer,
                                VmaAllocation &bufferAllocation);
 
-  void createScratchBuffer(VkDeviceSize size, VkBuffer &buffer,
-                           VmaAllocation &bufferAllocation);
+  void createScratchBuffer(VkDeviceSize size, VkDeviceSize alignment,
+                           VkBuffer &buffer, VmaAllocation &bufferAllocation);
+
+private:
+  VmaAllocator &allocator;
 };
