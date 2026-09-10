@@ -24,20 +24,23 @@ private:
   glm::vec3 orig, dir;
 };
 
-struct BLAS {
+struct InstanceBuffer {
+  VkBuffer buffer;
+  VmaAllocation allocation;
+  VmaAllocationInfo allocationInfo;
+};
+
+struct AS {
   VkAccelerationStructureKHR accelerationStructure;
   VkBuffer buffer{VK_NULL_HANDLE};
   VmaAllocation allocation{VK_NULL_HANDLE};
   VkBuffer scratchBuffer{VK_NULL_HANDLE};
   VmaAllocation scratchAllocation{VK_NULL_HANDLE};
 };
+struct BLAS : public AS {};
 
-struct TLAS {};
-
-struct InstanceBuffer {
-  VkBuffer buffer;
-  VmaAllocation allocation;
-  VmaAllocationInfo allocationInfo;
+struct TLAS : public AS {
+  InstanceBuffer instanceBuffer;
 };
 
 class RayTracing {
@@ -134,11 +137,11 @@ public:
     vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildInfo,
                                         rangeInfos);
 
-    return {.accelerationStructure = as,
-            .buffer = blasBuffer,
-            .allocation = blasAllocation,
-            .scratchBuffer = blasScratchBuffer,
-            .scratchAllocation = blasScratchAllocation};
+    return {{.accelerationStructure = as,
+             .buffer = blasBuffer,
+             .allocation = blasAllocation,
+             .scratchBuffer = blasScratchBuffer,
+             .scratchAllocation = blasScratchAllocation}};
   }
 
   InstanceBuffer createInstanceBuffer(VkDeviceAddress blasAddress) {
@@ -162,7 +165,9 @@ public:
     return ib;
   }
 
-  TLAS cmdBuildTlas(VkDevice &device, VkDeviceAddress blasAddress) {
+  TLAS cmdBuildTlas(VkDevice &device, VkPhysicalDevice &physicalDevice,
+                    VkDeviceAddress blasAddress,
+                    VkCommandBuffer &commandBuffer) {
     InstanceBuffer ib = createInstanceBuffer(blasAddress);
 
     VkBufferDeviceAddressInfo addrInfo{
@@ -183,7 +188,79 @@ public:
         .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
         .geometry = {.instances = instancesData},
     };
-    return {};
+
+    VkAccelerationStructureBuildGeometryInfoKHR buildInfo{
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+        .type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
+        // .flags =
+        .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+        .geometryCount = 1,
+        .pGeometries = &geometry,
+    };
+
+    VkAccelerationStructureBuildSizesInfoKHR sizeInfo{
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
+
+    uint32_t instanceCount = 3;
+    vkGetAccelerationStructureBuildSizesKHR(
+        device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo,
+        &instanceCount, &sizeInfo);
+    BufferCreator bc{allocator};
+    VkBuffer tlasBuffer{VK_NULL_HANDLE};
+    VmaAllocation tlasAllocation{VK_NULL_HANDLE};
+    bc.createAccelerationStructureBackingBuffer(
+        sizeInfo.accelerationStructureSize, tlasBuffer, tlasAllocation);
+
+    VkBuffer tlasScratchBuffer{VK_NULL_HANDLE};
+    VmaAllocation tlasScratchAllocation{VK_NULL_HANDLE};
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR asProperties{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
+    VkPhysicalDeviceProperties2 deviceProperties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &asProperties,
+    };
+    vkGetPhysicalDeviceProperties2(physicalDevice, &deviceProperties);
+    VkDeviceSize alignment =
+        asProperties.minAccelerationStructureScratchOffsetAlignment;
+    bc.createScratchBuffer(sizeInfo.buildScratchSize, alignment,
+                           tlasScratchBuffer, tlasScratchAllocation);
+
+    VkAccelerationStructureKHR as;
+    VkAccelerationStructureCreateInfoKHR acCI{
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+        .buffer = tlasBuffer,
+        .size = sizeInfo.accelerationStructureSize,
+        .type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
+    };
+    chk(vkCreateAccelerationStructureKHR(device, &acCI, nullptr, &as));
+
+    VkBufferDeviceAddressInfo scratchAddrInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .buffer = tlasScratchBuffer,
+    };
+    buildInfo.dstAccelerationStructure = as;
+    buildInfo.scratchData.deviceAddress =
+        vkGetBufferDeviceAddress(device, &scratchAddrInfo);
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo{
+        .primitiveCount = instanceCount,
+        .primitiveOffset = 0,
+        .firstVertex = 0,
+        .transformOffset = 0,
+    };
+    const VkAccelerationStructureBuildRangeInfoKHR *rangeInfos[] = {&rangeInfo};
+
+    vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildInfo,
+                                        rangeInfos);
+
+    return {{.accelerationStructure = as,
+             .buffer = tlasBuffer,
+             .allocation = tlasAllocation,
+             .scratchBuffer = tlasScratchBuffer,
+             .scratchAllocation = tlasScratchAllocation},
+            .instanceBuffer = ib};
   }
 
   VkAccelerationStructureInstanceKHR

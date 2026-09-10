@@ -804,7 +804,16 @@ int main(int argc, char *argv[]) {
     BLAS blas = rt.cmdBuildBlas(device, devices[deviceIndex],
                                 vertexBufferAddress, indexBufferAddress,
                                 vBufSize, commandBuffers[frameIndex]);
-    // rt.sthBuildTlas();
+    VkAccelerationStructureDeviceAddressInfoKHR blasAddrInfo{
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+        .accelerationStructure = blas.accelerationStructure,
+    };
+    VkDeviceAddress blasDeviceAddress =
+        vkGetAccelerationStructureDeviceAddressKHR(device, &blasAddrInfo);
+
+    TLAS tlas = rt.cmdBuildTlas(device, devices[deviceIndex], blasDeviceAddress,
+                                commandBuffers[frameIndex]);
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{
@@ -1045,6 +1054,10 @@ int main(int argc, char *argv[]) {
 
     vmaDestroyBuffer(allocator, blas.buffer, blas.allocation);
     vmaDestroyBuffer(allocator, blas.scratchBuffer, blas.scratchAllocation);
+    vmaDestroyBuffer(allocator, tlas.buffer, tlas.allocation);
+    vmaDestroyBuffer(allocator, tlas.scratchBuffer, tlas.scratchAllocation);
+    vmaDestroyBuffer(allocator, tlas.instanceBuffer.buffer,
+                     tlas.instanceBuffer.allocation);
   }
   // Clean up
   chk(vkDeviceWaitIdle(device));
