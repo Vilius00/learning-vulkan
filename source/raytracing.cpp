@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <memory.h>
 #include <vulkan/vulkan.h>
 
 class Ray {
@@ -32,6 +33,12 @@ struct BLAS {
 };
 
 struct TLAS {};
+
+struct InstanceBuffer {
+  VkBuffer buffer;
+  VmaAllocation allocation;
+  VmaAllocationInfo allocationInfo;
+};
 
 class RayTracing {
 public:
@@ -81,8 +88,8 @@ public:
     BufferCreator bc{allocator};
     VkBuffer blasBuffer{VK_NULL_HANDLE};
     VmaAllocation blasAllocation{VK_NULL_HANDLE};
-    bc.createBackingBLASBuffer(sizeInfo.accelerationStructureSize, blasBuffer,
-                               blasAllocation);
+    bc.createAccelerationStructureBackingBuffer(
+        sizeInfo.accelerationStructureSize, blasBuffer, blasAllocation);
     VkBuffer blasScratchBuffer{VK_NULL_HANDLE};
     VmaAllocation blasScratchAllocation{VK_NULL_HANDLE};
     VkPhysicalDeviceAccelerationStructurePropertiesKHR asProperties{
@@ -134,22 +141,61 @@ public:
             .scratchAllocation = blasScratchAllocation};
   }
 
-  TLAS sthBuildTlas(VkDeviceAddress blasAddress) {
-    VkAccelerationStructureInstanceKHR asInstance{
-        .transform = toVkTransformMatrix(glm::mat4(1.0f)),
+  InstanceBuffer createInstanceBuffer(VkDeviceAddress blasAddress) {
+    BufferCreator bc{allocator};
+    InstanceBuffer ib{};
+    bc.createInstanceBuffer(sizeof(VkAccelerationStructureInstanceKHR) * 3,
+                            ib.buffer, ib.allocation, ib.allocationInfo);
+
+    auto *instances = static_cast<VkAccelerationStructureInstanceKHR *>(
+        ib.allocationInfo.pMappedData);
+
+    for (int i = 0; i < 3; i++) {
+      std::construct_at(
+          &instances[i],
+          createInstanceWithTransform(
+              blasAddress,
+              glm::translate(glm::mat4(1.0f),
+                             glm::vec3((i - 1) * 3.0f, 0.0f, 0.0f))));
+    }
+
+    return ib;
+  }
+
+  TLAS cmdBuildTlas(VkDevice &device, VkDeviceAddress blasAddress) {
+    InstanceBuffer ib = createInstanceBuffer(blasAddress);
+
+    VkBufferDeviceAddressInfo addrInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .buffer = ib.buffer,
+    };
+    auto ibDeviceAddress = vkGetBufferDeviceAddress(device, &addrInfo);
+
+    VkAccelerationStructureGeometryInstancesDataKHR instancesData{
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR,
+        .arrayOfPointers = VK_FALSE,
+        .data = {.deviceAddress = ibDeviceAddress},
+    };
+
+    VkAccelerationStructureGeometryKHR geometry{
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
+        .geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR,
+        .geometry = {.instances = instancesData},
+    };
+    return {};
+  }
+
+  VkAccelerationStructureInstanceKHR
+  createInstanceWithTransform(VkDeviceAddress blasAddress,
+                              glm::mat4 &&transform) {
+    return {
+        .transform = toVkTransformMatrix(transform),
         .instanceCustomIndex = 0,
         .mask = 0xFF,
         .instanceShaderBindingTableRecordOffset = 0,
         .accelerationStructureReference = blasAddress,
     };
-
-    BufferCreator bc{allocator};
-    VkBuffer tlasBuffer{VK_NULL_HANDLE};
-    VmaAllocation tlasAllocation{VK_NULL_HANDLE};
-    bc.createBackingTLASBuffer(sizeof(VkAccelerationStructureInstanceKHR) * 1,
-                               tlasBuffer, tlasAllocation);
-
-    return {};
   }
 
 private:

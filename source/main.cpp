@@ -320,7 +320,8 @@ int main(int argc, char *argv[]) {
       .usage =
           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-          VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR};
+          VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR // input for BLAS
+  };
 
   VmaAllocationCreateInfo vBufferAllocCI{
       .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
@@ -803,7 +804,7 @@ int main(int argc, char *argv[]) {
     BLAS blas = rt.cmdBuildBlas(device, devices[deviceIndex],
                                 vertexBufferAddress, indexBufferAddress,
                                 vBufSize, commandBuffers[frameIndex]);
-    rt.sthBuildTlas();
+    // rt.sthBuildTlas();
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{
