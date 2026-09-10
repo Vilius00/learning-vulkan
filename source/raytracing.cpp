@@ -40,6 +40,7 @@ struct AS {
 struct BLAS : public AS {};
 
 struct TLAS : public AS {
+  AS accelerationStructure;
   InstanceBuffer instanceBuffer;
 };
 
@@ -255,11 +256,11 @@ public:
     vkCmdBuildAccelerationStructuresKHR(commandBuffer, 1, &buildInfo,
                                         rangeInfos);
 
-    return {{.accelerationStructure = as,
-             .buffer = tlasBuffer,
-             .allocation = tlasAllocation,
-             .scratchBuffer = tlasScratchBuffer,
-             .scratchAllocation = tlasScratchAllocation},
+    return {.accelerationStructure{.accelerationStructure = as,
+                                   .buffer = tlasBuffer,
+                                   .allocation = tlasAllocation,
+                                   .scratchBuffer = tlasScratchBuffer,
+                                   .scratchAllocation = tlasScratchAllocation},
             .instanceBuffer = ib};
   }
 
