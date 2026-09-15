@@ -8,6 +8,11 @@
 #include <memory.h>
 #include <vulkan/vulkan.h>
 
+struct Image {
+  VkImage image;
+  VmaAllocation allocation;
+};
+
 class Ray {
 public:
   Ray() {}
@@ -274,6 +279,28 @@ public:
         .instanceShaderBindingTableRecordOffset = 0,
         .accelerationStructureReference = blasAddress,
     };
+  }
+
+  Image createImage(VkExtent2D swapchainExtent) {
+    VkImageCreateInfo ci{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .extent = {.width = swapchainExtent.width,
+                   .height = swapchainExtent.height,
+                   .depth = 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    VmaAllocationCreateInfo allocCI{.usage = VMA_MEMORY_USAGE_AUTO};
+    VkImage image;
+    VmaAllocation allocation;
+    vmaCreateImage(allocator, &ci, &allocCI, &image, &allocation, nullptr);
+    return {.image = image, .allocation = allocation};
   }
 
 private:
