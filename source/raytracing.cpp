@@ -11,6 +11,7 @@
 struct Image {
   VkImage image;
   VmaAllocation allocation;
+  VkImageView view;
 };
 
 class Ray {
@@ -281,11 +282,12 @@ public:
     };
   }
 
-  Image createImage(VkExtent2D swapchainExtent) {
+  Image createImage(VkDevice &device, VkExtent2D &swapchainExtent,
+                    VkFormat format, VkCommandBuffer &cb) {
     VkImageCreateInfo ci{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = VK_FORMAT_B8G8R8A8_UNORM,
+        .format = format,
         .extent = {.width = swapchainExtent.width,
                    .height = swapchainExtent.height,
                    .depth = 1},
@@ -299,8 +301,48 @@ public:
     VmaAllocationCreateInfo allocCI{.usage = VMA_MEMORY_USAGE_AUTO};
     VkImage image;
     VmaAllocation allocation;
-    vmaCreateImage(allocator, &ci, &allocCI, &image, &allocation, nullptr);
-    return {.image = image, .allocation = allocation};
+    chk(vmaCreateImage(allocator, &ci, &allocCI, &image, &allocation, nullptr));
+
+    VkImageMemoryBarrier2 barrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT |
+                        VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+        .dstAccessMask =
+            VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .image = image,
+        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                             .levelCount = 1,
+                             .layerCount = 1}};
+
+    VkImageViewCreateInfo viewCI{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image = image,
+        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+        .format = format,
+        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1},
+    };
+    VkImageView view;
+    chk(vkCreateImageView(device, &viewCI, nullptr, &view));
+
+    return {.image = image, .allocation = allocation, .view = view};
+  }
+
+  std::string testFormats(VkPhysicalDevice &physicalDevice, VkFormat format) {
+    VkFormatProperties props;
+
+    vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+    bool supportsStorage = (props.optimalTilingFeatures &
+                            VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0;
+
+    return (supportsStorage ? "YES\n" : "NO\n");
   }
 
 private:

@@ -210,6 +210,8 @@ int main(int argc, char *argv[]) {
                        .height = static_cast<uint32_t>(windowSize.y)};
   }
 
+  RayTracing rt{allocator};
+
   const VkFormat imageFormat{VK_FORMAT_B8G8R8A8_SRGB};
   VkSwapchainCreateInfoKHR swapchainCI{
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -439,6 +441,10 @@ int main(int argc, char *argv[]) {
     VkFence fenceOneTime{};
     chk(vkCreateFence(device, &fenceOneTimeCI, nullptr, &fenceOneTime));
     VkCommandBuffer cbOneTime{};
+
+    Image raytracingResultImage = rt.createImage(
+        device, swapchainExtent, VK_FORMAT_R8G8B8A8_UNORM, cbOneTime);
+
     VkCommandBufferAllocateInfo cbOneTimeAI{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = commandPool,
@@ -486,10 +492,10 @@ int main(int argc, char *argv[]) {
                            copyRegions.data());
     VkImageMemoryBarrier2 barrierTexRead{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
         .image = textures[i].image,
@@ -794,7 +800,6 @@ int main(int argc, char *argv[]) {
     };
     chk(vkBeginCommandBuffer(cb, &cbBI));
 
-    RayTracing rt{allocator};
     VkBufferDeviceAddressInfo vBufferBdaInfo{
         .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_KHR,
         .buffer = vBuffer};
@@ -814,6 +819,10 @@ int main(int argc, char *argv[]) {
 
     TLAS tlas = rt.cmdBuildTlas(device, devices[deviceIndex], blasDeviceAddress,
                                 commandBuffers[frameIndex]);
+
+    std::cout << "VK_FORMAT_R8G8B8A8_UNORM is supported for storage: "
+              << rt.testFormats(devices[deviceIndex], VK_FORMAT_R8G8B8A8_UNORM)
+              << std::endl;
 
     std::array<VkImageMemoryBarrier2, 2> outputBarriers{
         VkImageMemoryBarrier2{
